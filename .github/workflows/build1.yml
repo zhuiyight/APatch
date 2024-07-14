@@ -1,78 +1,65 @@
-name: Build Manager
+name: Build Manager  # 定义工作流的名称
 
-on:
-  push:
-    tags: [ "*" ]
-    branches: [ "main" ]
-    paths:
-      - '.github/workflows/build.yml'
-      - 'app/**'
-      - 'apd/**'
-      - 'build.gradle.kts'
-      - 'gradle/libs.versions.toml'
-  pull_request:
-    branches: [ "main" ]
-    paths:
-      - '.github/workflows/build.yml'
-      - 'app/**'
-      - 'apd/**'
-      - 'build.gradle.kts'
-      - 'gradle/libs.versions.toml'
-  workflow_call:
-  workflow_dispatch:
+on:  # 定义触发工作流的事件
+  workflow_dispatch:  # 允许手动触发工作流
 
-jobs:
-  build-manager:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+jobs:  # 定义工作流中的作业
+  build-manager:  # 作业名称
+    runs-on: ubuntu-latest  # 指定作业运行在 ubuntu-latest 环境
+    permissions:  # 设置作业所需的权限
+      contents: write  # 赋予写入权限，以便可以推送代码或创建发布
+
+    steps:  # 定义作业中的各个步骤
+      - name: Checkout  # 步骤名称：检出代码
+        uses: actions/checkout@v4  # 使用 actions/checkout 动作
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # 获取所有分支的提交历史
 
-      - name: Generate version
-        id: parse_version
+      - name: Generate version  # 步骤名称：生成版本号
+        id: parse_version  # 步骤标识符，用于后续引用输出
         run: |
+          # 使用 shell 脚本计算版本号
           COMMIT_NUM=$(git rev-list --count HEAD)
           VERSION=$(echo "$COMMIT_NUM + 200 + 10000" | bc)
           echo "Generated Version: $VERSION"
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT  # 将版本号输出到 GitHub 输出环境变量
 
-      - name: Setup Java
-        uses: actions/setup-java@v4
+      - name: Setup Java  # 步骤名称：设置 Java 环境
+        uses: actions/setup-java@v4  # 使用 actions/setup-java 动作
         with:
-          distribution: temurin
-          java-version: 21
+          distribution: temurin  # 指定 Java 发行版为 temurin
+          java-version: 21  # 指定 Java 版本为 21
 
-      - name: Setup Gradle
-        uses: gradle/gradle-setup-action@v1
+      - name: Setup Gradle  # 步骤名称：设置 Gradle 环境
+        uses: gradle/actions/setup-gradle@v3  # 使用 gradle/setup-gradle 动作
         with:
-          gradle-version: wrapper
+          gradle-home-cache-cleanup: true  # 清理 Gradle 缓存
 
-      - name: Setup Android NDK
-        uses: nttld/setup-ndk@v1
+      - name: Setup Android NDK  # 步骤名称：设置 Android NDK 环境
+        uses: nttld/setup-ndk@v1  # 使用 nttld/setup-ndk 动作
+        id: setup-ndk  # 步骤标识符
         with:
-          ndk-version: r26d
-          add-to-path: true
-          local-cache: true
+          ndk-version: r26d  # 指定 NDK 版本
+          add-to-path: true  # 将 NDK 添加到 PATH
+          local-cache: true  # 使用本地缓存
 
-      - name: Install toolchain
+      - name: Install toolchain  # 步骤名称：安装工具链
         run: |
+          # 使用 shell 脚本安装 Rust 工具链和 cargo-ndk
           rustup default stable
           rustup update stable
           cargo install cargo-ndk
           rustup target install aarch64-linux-android
 
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
+      - name: Cache Rust  # 步骤名称：缓存 Rust 编译产物
+        uses: Swatinem/rust-cache@v2  # 使用 Swatinem/rust-cache 动作
         with:
-          workspaces: apd
-          cache-targets: false
+          workspaces: apd  # 指定工作区
+          cache-targets: false  # 不缓存构建目标
 
-      - name: Build with Gradle
+      - name: Build with Gradle  # 步骤名称：使用 Gradle 构建
         run: |
+          # 使用 shell 脚本设置 Gradle 属性并执行构建
           echo 'org.gradle.parallel=true' >> gradle.properties
           echo 'org.gradle.vfs.watch=true' >> gradle.properties
           echo 'org.gradle.jvmargs=-Xmx2048m' >> gradle.properties
@@ -80,8 +67,9 @@ jobs:
           sed -i 's/org.gradle.configuration-cache=true//g' gradle.properties
           ./gradlew clean assembleRelease
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+
+      - name: Upload build artifact  # 步骤名称：上传构建产物
+        uses: actions/upload-artifact@v4  # 使用 actions/upload-artifact 动作
         with:
-          name: APatch
-          path: app/build/outputs/apk/release/*.apk
+          name: APatch  # 指定上传的构建产物名称
+          path: ${{steps.sign_app.outputs.signedReleaseFile}}  # 指定上传的文件路径
