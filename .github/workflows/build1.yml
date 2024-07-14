@@ -72,4 +72,4 @@ jobs:  # 定义工作流中的作业
         uses: actions/upload-artifact@v4  # 使用 actions/upload-artifact 动作
         with:
           name: APatch  # 指定上传的构建产物名称
-          path: ${{steps.sign_app.outputs.signedReleaseFile}}  # 指定上传的文件路径
+          path: app/build/outputs/apk/release/*.apk
